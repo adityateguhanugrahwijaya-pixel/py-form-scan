@@ -77,19 +77,11 @@ def _order_points(pts):
     return rect
 
 
-def _fallback_contour_or_resize_align(image):
-    """Fallback alignment when ArUco markers are not printed/detected on the photo:
-    1. Handle landscape vs portrait orientation (rotate landscape photos 90°).
-    2. Map paper boundaries onto the original page area inside canonical grid
-       (accounting for MARGIN_PT offset).
-    """
-    # 1. Auto-rotate landscape photos to portrait
+def _warp_to_canonical(image):
+    """Warps image to canonical template size, mapping paper corners to original page rect."""
     h, w = image.shape[:2]
-    if w > h:
-        image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
-        h, w = image.shape[:2]
 
-    # Target points: the paper outline corresponds to the ORIGINAL page inside CANONICAL canvas
+    # Target points: original page dimensions inside canonical canvas
     x0 = cfg.MARGIN_PT * cfg.PT_TO_PX
     y0 = cfg.MARGIN_PT * cfg.PT_TO_PX
     x1 = (cfg.ORIG_PAGE_W_PT + cfg.MARGIN_PT) * cfg.PT_TO_PX
@@ -102,7 +94,7 @@ def _fallback_contour_or_resize_align(image):
         [x0, y1]
     ], dtype="float32")
 
-    # 2. Try paper contour detection
+    # 1. Try paper contour detection
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     edged = cv2.Canny(blurred, 30, 120)
@@ -112,18 +104,19 @@ def _fallback_contour_or_resize_align(image):
     contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
-    min_area = (h * w) * 0.15
+    min_area = (h * w) * 0.20
     for c in contours:
         if cv2.contourArea(c) < min_area:
             break
         peri = cv2.arcLength(c, True)
         approx = cv2.approxPolyDP(c, 0.02 * peri, True)
-        if len(approx) == 4:
-            src_pts = _order_points(approx.reshape(4, 2))
+        if len(approx) == 4 and cv2.isContourConvex(approx):
+            pts = approx.reshape(4, 2)
+            src_pts = _order_points(pts)
             M = cv2.getPerspectiveTransform(src_pts, dst_pts)
             return cv2.warpPerspective(image, M, cfg.CANONICAL_SIZE_PX)
 
-    # 3. Direct perspective warp: map full image corners to original page rect inside canonical canvas
+    # 2. Fallback: map full image frame corners to original page rect
     src_pts = np.array([
         [0, 0],
         [w - 1, 0],
@@ -132,6 +125,48 @@ def _fallback_contour_or_resize_align(image):
     ], dtype="float32")
     M = cv2.getPerspectiveTransform(src_pts, dst_pts)
     return cv2.warpPerspective(image, M, cfg.CANONICAL_SIZE_PX)
+
+
+def _score_header_orientation(aligned_bgr):
+    """Measures header edge/text density in top 25% vs bottom 25% of page."""
+    gray = cv2.cvtColor(aligned_bgr, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape
+    top_region = gray[0 : int(h * 0.25), :]
+    bottom_region = gray[int(h * 0.75) :, :]
+
+    top_edges = np.sum(cv2.Canny(top_region, 50, 150) > 0)
+    bottom_edges = np.sum(cv2.Canny(bottom_region, 50, 150) > 0)
+    return int(top_edges) - int(bottom_edges)
+
+
+def _fallback_contour_or_resize_align(image):
+    """Robust fallback alignment for un-margined paper photos:
+    1. Generates portrait candidate orientations.
+    2. Uses header text/line density scoring to ensure form is right-side up.
+    3. Warps paper contour to canonical grid coordinates.
+    """
+    h, w = image.shape[:2]
+
+    if w > h:
+        # Photo was taken in landscape -> test 90° CW and 90° CCW
+        cand1 = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+        cand2 = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    else:
+        # Photo was taken in portrait -> test 0° and 180°
+        cand1 = image
+        cand2 = cv2.rotate(image, cv2.ROTATE_180)
+
+    warped1 = _warp_to_canonical(cand1)
+    warped2 = _warp_to_canonical(cand2)
+
+    score1 = _score_header_orientation(warped1)
+    score2 = _score_header_orientation(warped2)
+
+    if score1 >= score2:
+        return warped1
+    else:
+        return warped2
+
 
 
 
