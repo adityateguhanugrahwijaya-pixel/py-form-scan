@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FormScan — Student Survey & OMR Scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- SweetAlert2 for clean alerts -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<style>
+  :root {
+    --google-blue: #1a73e8;
+    --google-blue-hover: #174ea6;
+    --google-green: #1e8e3e;
+    --google-gray-bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --border-color: #dadce0;
+    --text-primary: #202124;
+    --text-secondary: #5f6368;
+    --chip-bg: #e8f0fe;
+    --chip-text: #1967d2;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Google Sans', 'Roboto', system-ui, -apple-system, sans-serif; }
+
+  body {
+    background-color: var(--google-gray-bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding-bottom: 40px;
+  }
+
+  /* Google App Header */
+  header {
+    background: #ffffff;
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.1);
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .app-icon {
+    width: 40px;
+    height: 40px;
+    background: #1a73e8;
+    color: white;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: bold;
+  }
+
+  .app-title {
+    font-size: 20px;
+    font-weight: 500;
+    color: #3c4043;
+  }
+
+  .app-subtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .container {
+    max-width: 960px;
+    margin: 20px auto;
+    padding: 0 16px;
+  }
+
+  /* Classroom Class Banner */
+  .classroom-banner {
+    background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%);
+    color: white;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3);
+  }
+
+  .banner-title {
+    font-size: 24px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  .banner-desc {
+    font-size: 14px;
+    opacity: 0.9;
+  }
+
+  /* Material Tabs */
+  .material-tabs {
+    display: flex;
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 14px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .tab-btn:hover {
+    background: #f1f3f4;
+    color: var(--text-primary);
+  }
+
+  .tab-btn.active {
+    color: var(--google-blue);
+    border-bottom-color: var(--google-blue);
+    background: #f8fafd;
+  }
+
+  .badge-count {
+    background: var(--chip-bg);
+    color: var(--chip-text);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px;
+  }
+
+  /* Tab Views */
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Cards */
+  .material-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
+  }
+
+  /* Camera Box */
+  .camera-box {
+    position: relative;
+    width: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #000;
+    aspect-ratio: 4/3;
+    border: 1px solid var(--border-color);
+    margin-bottom: 16px;
+  }
+
+  video, canvas, img.preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Action Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+    text-decoration: none;
+  }
+
+  .btn-blue {
+    background: var(--google-blue);
+    color: white;
+    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
+  }
+  .btn-blue:hover { background: var(--google-blue-hover); }
+
+  .btn-outlined {
+    background: white;
+    color: var(--google-blue);
+    border: 1px solid var(--border-color);
+  }
+  .btn-outlined:hover { background: #f8fafd; border-color: #c6dafc; }
+
+  .btn-green {
+    background: var(--google-green);
+    color: white;
+  }
+  .btn-green:hover { background: #167733; }
+
+  /* Scan Breakdown Cards */
+  .result-banner {
+    background: #e6f4ea;
+    border: 1px solid #ceead6;
+    border-radius: 8px;
+    padding: 18px;
+    margin-top: 16px;
+  }
+
+  .result-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #137333;
+    margin-bottom: 12px;
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .info-box {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+  }
+
+  .info-label { font-size: 11px; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; }
+  .info-value { font-size: 14px; font-weight: 500; color: var(--text-primary); margin-top: 4px; }
+
+  /* Material Chips */
+  .chip {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--chip-bg);
+    color: var(--chip-text);
+    margin-right: 6px;
+    margin-top: 4px;
+  }
+
+  /* Crops List */
+  .crops-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .crop-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+  }
+
+  .crop-card img {
+    width: 100%;
+    max-height: 70px;
+    object-fit: contain;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #e8eaed;
+  }
+
+  .crop-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-top: 6px;
+  }
+
+  .ocr-text-box {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1967d2;
+    background: #e8f0fe;
+    padding: 6px 10px;
+    border-radius: 4px;
+    margin-top: 6px;
+    word-break: break-word;
+    border: 1px solid #c6dafc;
+  }
+
+  /* Student Submissions Card */
+  .submission-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px 0 rgba(60,64,67,0.15);
+  }
+
+  .submission-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1px solid #f1f3f4;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
+
+  .student-title {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--google-blue);
+  }
+
+  .student-meta {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .submission-time {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .photo-thumb {
+    width: 110px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+  }
+
+  .search-bar {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 16px;
+    outline: none;
+    background: white;
+  }
+  .search-bar:focus { border-color: var(--google-blue); box-shadow: 0 0 6px rgba(26, 115, 232, 0.2); }
+
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+
+  .hidden { display: none !important; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: auto; }
+  .modal-card {
+    background: white;
+    border-radius: 8px;
+    max-width: 800px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 24px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+
+  /* SweetAlert Custom Styling for Google Theme */
+  .swal2-popup { border-radius: 8px !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="app-icon">📚</div>
+    <div>
+      <div class="app-title">FormScan</div>
+      <div class="app-subtitle">Student Lifestyle & Aspirations Survey</div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Classroom Class Banner -->
+  <div class="classroom-banner">
+    <div class="banner-title">Classroom Form Scanner</div>
+    <div class="banner-desc">Scan student surveys, extract handwritten text with Tesseract OCR, and view results.</div>
+  </div>
+
+  <!-- Material Navigation Tabs -->
+  <div class="material-tabs">
+    <button class="tab-btn active" onclick="switchTab('scanner', event)">📸 Scanner</button>
+    <button class="tab-btn" onclick="switchTab('results', event)">
+      📋 Submissions <span class="badge-count" id="count-badge">0</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('analytics', event)">📊 Exports & Data</button>
+  </div>
+
+  <!-- TAB 1: SCANNER -->
+  <div id="tab-scanner" class="tab-content active">
+    <div class="material-card">
+      <div class="camera-box">
+        <video id="cam" autoplay playsinline></video>
+        <canvas id="canvas" class="hidden"></canvas>
+        <img id="preview" class="preview-img hidden">
+      </div>
+
+      <!-- Hidden Native File Upload Fallback -->
+      <input type="file" id="file-input" accept="image/*" capture="environment" class="hidden">
+
+      <div style="display: flex; gap: 10px;">
+        <button id="shoot" class="btn btn-blue" style="flex:1;">📸 Take Photo</button>
+      </div>
+
+      <div id="capture-actions" class="hidden" style="display: flex; gap: 10px; margin-top: 10px;">
+        <button id="retake" class="btn btn-outlined" style="flex:1;">↺ Retake Photo</button>
+        <button id="confirm" class="btn btn-green" style="flex:1;">⚡ Upload & Process Survey</button>
+      </div>
+
+      <div id="status" style="margin-top: 12px; font-size: 13px; color: var(--text-secondary); text-align: center;"></div>
+
+      <!-- Live Scan Result Card -->
+      <div id="live-result" class="hidden"></div>
+    </div>
+  </div>
+
+  <!-- TAB 2: SUBMISSIONS VIEW -->
+  <div id="tab-results" class="tab-content">
+    <input type="text" id="search-input" class="search-bar" placeholder="🔍 Search submissions by student name, class, form ID, or answers..." oninput="renderScans()">
+
+    <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+      <a href="/download/excel" download class="btn btn-blue">📊 Download Excel (.xlsx)</a>
+      <a href="/download/csv" download class="btn btn-outlined">📄 Download CSV</a>
+    </div>
+
+    <div id="scans-list">
+      <!-- Dynamic Submission Cards injected here -->
+    </div>
+  </div>
+
+  <!-- TAB 3: EXPORTS & ANALYTICS -->
+  <div id="tab-analytics" class="tab-content">
+    <div class="material-card">
+      <h3 style="margin-bottom: 16px; font-weight: 500;">📊 Class Data Summary</h3>
+      <div class="info-grid">
+        <div class="info-box">
+          <div class="info-label">Total Surveys Processed</div>
+          <div class="info-value" id="stat-total" style="font-size: 20px; color: var(--google-blue);">0</div>
+        </div>
+        <div class="info-box">
+          <div class="info-label">OCR Text Engine</div>
+          <div class="info-value" style="color: var(--google-green);">Tesseract OCR Active</div>
+        </div>
+        <div class="info-box">
+          <div class="info-label">Storage Spreadsheet</div>
+          <div class="info-value">data/results.xlsx</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; display: flex; gap: 12px; flex-wrap: wrap;">
+        <a href="/download/excel" download class="btn btn-blue">📊 Download Complete Excel Spreadsheet</a>
+        <a href="/download/csv" download class="btn btn-outlined">📄 Download Raw CSV Backup</a>
+        <button class="btn btn-outlined" style="color: #d93025; border-color: #fce8e6;" onclick="clearAllData()">🗑️ Clear All Server Data</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Inspection Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h3 style="font-weight: 500; color: var(--google-blue);" id="modal-title">Submission Details</h3>
+      <button class="btn btn-outlined" style="padding: 4px 12px;" onclick="closeModal()">Close</button>
+    </div>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<script>
+let allScans = [];
+let currentBlob = null;
+
+const video = document.getElementById('cam');
+const canvas = document.getElementById('canvas');
+const preview = document.getElementById('preview');
+const shootBtn = document.getElementById('shoot');
+const retakeBtn = document.getElementById('retake');
+const confirmBtn = document.getElementById('confirm');
+const captureActions = document.getElementById('capture-actions');
+const fileInput = document.getElementById('file-input');
+const statusDiv = document.getElementById('status');
+const liveResult = document.getElementById('live-result');
+const countBadge = document.getElementById('count-badge');
+const statTotal = document.getElementById('stat-total');
+
+// Helper to strip out debug prefixes, 'Text:', and field header names
+function cleanText(txt) {
+  if (!txt) return '';
+  let str = txt.replace(/^FIELD[\.\:_ ]+[A-Z_]+[\.\:_ ]*(Content[\.\:_ ]*)?/i, '').trim();
+  str = str.replace(/^(Text|Content)[:\.\s_]*/i, '').trim();
+  const labelPattern = /^(Full\s*Name|Class[\s\/]*Grade|ClasGrade|Age|Other\s*Specify|OtherSpecfy|Car[ea]*o*r?\s*Pref[a-z]*|Car[ea]*o*r?\s*Reas[a-z]*|Reason\s*(for\s*Interest)?|Future\s*Career\s*Pref[a-z]*)[:\.\s_]*/i;
+  str = str.replace(labelPattern, '').trim();
+  return str.trim();
+}
+
+// Camera Init
+navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } })
+  .then(stream => { video.srcObject = stream; })
+  .catch(err => { statusDiv.textContent = "Camera preview disabled. Tap 'Take Photo' to snap or select an image."; });
+
+shootBtn.onclick = () => {
+  if (video.srcObject && video.videoWidth > 0) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob(blob => {
+      if (blob) setCapturedPhoto(blob);
+      else fileInput.click();
+    }, 'image/jpeg', 0.92);
+  } else {
+    fileInput.click();
+  }
+};
+
+fileInput.onchange = (e) => {
+  const file = e.target.files[0];
+  if (file) setCapturedPhoto(file);
+};
+
+function setCapturedPhoto(blob) {
+  currentBlob = blob;
+  preview.src = URL.createObjectURL(blob);
+  preview.classList.remove('hidden');
+  video.classList.add('hidden');
+  shootBtn.classList.add('hidden');
+  captureActions.classList.remove('hidden');
+  
+  statusDiv.textContent = "Photo ready. Tap 'Upload & Process' or 'Retake'.";
+}
+
+retakeBtn.onclick = () => {
+  currentBlob = null;
+  preview.classList.add('hidden');
+  video.classList.remove('hidden');
+  shootBtn.classList.remove('hidden');
+  captureActions.classList.add('hidden');
+  statusDiv.textContent = "";
+  liveResult.classList.add('hidden');
+};
+
+confirmBtn.onclick = () => {
+  if (!currentBlob) return;
+
+  Swal.fire({
+    title: 'Processing Survey...',
+    text: 'Aligning paper markers and extracting text with OCR...',
+    allowOutsideClick: false,
+    didOpen: () => { Swal.showLoading(); }
+  });
+
+  const fd = new FormData();
+  fd.append('image', currentBlob, 'form.jpg');
+
+  fetch('/scan', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        Swal.fire({ icon: 'error', title: 'Scanning Failed', text: data.error });
+        statusDiv.textContent = "❌ " + data.error;
+      } else {
+        Swal.fire({ icon: 'success', title: 'Survey Processed!', text: `Saved to results.xlsx (${data.form_id})`, timer: 2000, showConfirmButton: false });
+        statusDiv.textContent = "✅ Survey scanned & saved to results.xlsx!";
+        renderLiveResult(data);
+        fetchScans();
+      }
+    })
+    .catch(err => {
+      Swal.fire({ icon: 'error', title: 'Upload Error', text: err });
+    });
+};
+
+function renderLiveResult(data) {
+  let radioHtml = '';
+  if (data.radio_answers) {
+    for (let k in data.radio_answers) {
+      radioHtml += `<span class="chip">${k.replace('_', ' ')}: <strong>${data.radio_answers[k] || 'N/A'}</strong></span>`;
+    }
+  }
+
+  let platHtml = '';
+  if (data.platforms_checked) {
+    data.platforms_checked.forEach(p => { platHtml += `<span class="chip">${p}</span>`; });
+  }
+
+  let cropsHtml = '';
+  if (data.text_field_crops) {
+    for (let f in data.text_field_crops) {
+      const cropPath = '/' + data.text_field_crops[f].replace(/^data\//, 'data/');
+      const ocrText = cleanText((data.ocr_texts && data.ocr_texts[f]) ? data.ocr_texts[f] : '');
+      cropsHtml += `
+        <div class="crop-card">
+          <img src="${cropPath}" alt="${f}">
+          <div class="crop-name">${f.replace('_', ' ')}</div>
+          ${ocrText ? `<div class="ocr-text-box">${ocrText}</div>` : ''}
+        </div>
+      `;
+    }
+  }
+
+  let qualityHtml = '';
+  if (data.quality_metrics) {
+    const qm = data.quality_metrics;
+    qualityHtml = `
+      <span class="chip" style="background:#e8f0fe; color:#1a73e8;">Blur Score: <strong>${qm.blur_score}</strong></span>
+      <span class="chip" style="background:#e8f0fe; color:#1a73e8;">Brightness: <strong>${qm.brightness}</strong></span>
+    `;
+  }
+
+  liveResult.innerHTML = `
+    <div class="result-banner">
+      <div class="result-title">🎯 Survey Results (${data.form_id})</div>
+      <div class="info-grid">
+        <div class="info-box">
+          <div class="info-label">Radio Selections</div>
+          <div class="info-value">${radioHtml || 'None'}</div>
+        </div>
+        <div class="info-box">
+          <div class="info-label">Social Media Platforms</div>
+          <div class="info-value">${platHtml || 'None'}</div>
+        </div>
+        ${qualityHtml ? `
+        <div class="info-box">
+          <div class="info-label">Photo Quality Assessment</div>
+          <div class="info-value">${qualityHtml}</div>
+        </div>
+        ` : ''}
+      </div>
+      ${cropsHtml ? `
+        <div style="margin-top: 12px;">
+          <div class="section-title">Handwritten Answers + OCR Recognized Text</div>
+          <div class="crops-grid">${cropsHtml}</div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+  liveResult.classList.remove('hidden');
+}
+
+function switchTab(tabName, evt) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  
+  if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+  document.getElementById(`tab-${tabName}`).classList.add('active');
+
+  if (tabName === 'results') fetchScans();
+}
+
+function fetchScans() {
+  fetch('/api/scans')
+    .then(r => r.json())
+    .then(data => {
+      allScans = data.scans || [];
+      countBadge.textContent = allScans.length;
+      statTotal.textContent = allScans.length;
+      renderScans();
+    })
+    .catch(() => {});
+}
+
+function renderScans() {
+  const container = document.getElementById('scans-list');
+  const query = (document.getElementById('search-input').value || '').toLowerCase();
+
+  const filtered = allScans.filter(s => {
+    const text = (s.form_id + ' ' + (s.gender || '') + ' ' + (s.full_name_text || '') + ' ' + (s.class_grade_text || '') + ' ' + (s.platforms_checked || '')).toLowerCase();
+    return text.includes(query);
+  });
+
+  if (!filtered.length) {
+    container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px; background: white; border-radius: 8px; border: 1px solid var(--border-color);">No submission records found yet.</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(item => {
+    const photoPath = '/' + (item.source_photo || '').replace(/^data\//, 'data/');
+    
+    // Clean text fields
+    const nameText = cleanText(item.full_name_text) || 'Unknown Student';
+    const classText = cleanText(item.class_grade_text) || 'N/A';
+    const ageText = cleanText(item.age_text) || 'N/A';
+    const careerText = cleanText(item.career_preference_text);
+    const reasonText = cleanText(item.career_reason_text);
+
+    const crops = [
+      { name: 'Full Name', path: item.full_name_image, text: nameText },
+      { name: 'Class / Grade', path: item.class_grade_image, text: classText },
+      { name: 'Age', path: item.age_image, text: ageText },
+      { name: 'Future Career Preference', path: item.career_preference_image, text: careerText },
+      { name: 'Reason for Interest', path: item.career_reason_image, text: reasonText }
+    ].filter(c => c.path);
+
+    const cropCardsHtml = crops.map(c => {
+      const p = '/' + c.path.replace(/^data\//, 'data/');
+      return `
+        <div class="crop-card">
+          <img src="${p}">
+          <div class="crop-name">${c.name}</div>
+          ${c.text ? `<div class="ocr-text-box">${c.text}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="submission-card">
+        <div class="submission-header">
+          <div>
+            <div class="student-title">👤 ${nameText}</div>
+            <div class="student-meta">
+              <span>🏫 Class: <strong>${classText}</strong></span>
+              <span>🎂 Age: <strong>${ageText}</strong></span>
+              <span>👤 Gender: <strong>${item.gender || 'N/A'}</strong></span>
+              <span>🆔 Form ID: <code>${item.form_id}</code></span>
+            </div>
+          </div>
+          <div class="submission-time">${item.timestamp}</div>
+        </div>
+
+        <div style="margin-bottom: 16px; background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e8eaed;">
+          <div class="section-title">📊 Survey Responses</div>
+          <div style="margin-top: 4px;">
+            ${item.social_media_time ? `<span class="chip">Daily Social Media: <strong>${item.social_media_time}</strong></span>` : ''}
+            ${item.study_time ? `<span class="chip">Daily Study: <strong>${item.study_time}</strong></span>` : ''}
+            ${item.platforms_checked ? `<span class="chip" style="background: #fce8e6; color: #c5221f;">Platforms: ${item.platforms_checked}</span>` : ''}
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;">
+          <div style="flex: 1;">
+            <div class="section-title">✍️ Handwritten Answers + OCR Recognized Text</div>
+            <div class="crops-grid">${cropCardsHtml}</div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f3f4; pt-12; margin-top: 12px; padding-top: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <img src="${photoPath}" class="photo-thumb" onclick="openModal('${item.form_id}')">
+            <span style="font-size: 12px; color: var(--text-secondary);">Original Paper Photo</span>
+          </div>
+          <button class="btn btn-outlined" onclick="openModal('${item.form_id}')">🔍 View Full Paper</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function openModal(formId) {
+  const item = allScans.find(s => s.form_id === formId);
+  if (!item) return;
+
+  const photoPath = '/' + (item.source_photo || '').replace(/^data\//, 'data/');
+  const modalContent = document.getElementById('modal-content');
+  
+  const nameText = cleanText(item.full_name_text) || item.form_id;
+  document.getElementById('modal-title').textContent = `Student Submission: ${nameText}`;
+
+  const crops = [
+    { name: 'Full Name', path: item.full_name_image, text: cleanText(item.full_name_text) },
+    { name: 'Class / Grade', path: item.class_grade_image, text: cleanText(item.class_grade_text) },
+    { name: 'Age', path: item.age_image, text: cleanText(item.age_text) },
+    { name: 'Future Career Preference', path: item.career_preference_image, text: cleanText(item.career_preference_text) },
+    { name: 'Reason for Career Interest', path: item.career_reason_image, text: cleanText(item.career_reason_text) },
+    { name: 'Other Social Media Specify', path: item.other_specify_image, text: cleanText(item.other_specify_text) }
+  ].filter(c => c.path);
+
+  const cropGridHtml = crops.map(c => {
+    const p = '/' + c.path.replace(/^data\//, 'data/');
+    return `
+      <div class="crop-card" style="padding: 12px;">
+        <img src="${p}" style="max-height: 90px;">
+        <div class="crop-name" style="font-weight: 700; color: var(--google-blue);">${c.name}</div>
+        ${c.text ? `<div class="ocr-text-box" style="margin-top: 6px;">${c.text}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+
+  modalContent.innerHTML = `
+    <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">Submitted on: ${item.timestamp} | Form ID: ${item.form_id}</div>
+
+    <div class="info-grid" style="margin-bottom: 16px;">
+      <div class="info-box">
+        <div class="info-label">Student Name</div>
+        <div class="info-value" style="color: var(--google-blue); font-weight: 700;">${nameText}</div>
+      </div>
+      <div class="info-box">
+        <div class="info-label">Class / Grade</div>
+        <div class="info-value">${cleanText(item.class_grade_text) || 'N/A'}</div>
+      </div>
+      <div class="info-box">
+        <div class="info-label">Age</div>
+        <div class="info-value">${cleanText(item.age_text) || 'N/A'}</div>
+      </div>
+      <div class="info-box">
+        <div class="info-label">Gender</div>
+        <div class="info-value">${item.gender || 'N/A'}</div>
+      </div>
+    </div>
+
+    <div class="info-grid" style="margin-bottom: 16px;">
+      <div class="info-box">
+        <div class="info-label">Daily Social Media Usage</div>
+        <div class="info-value">${item.social_media_time || 'N/A'}</div>
+      </div>
+      <div class="info-box">
+        <div class="info-label">Daily Study Time</div>
+        <div class="info-value">${item.study_time || 'N/A'}</div>
+      </div>
+      <div class="info-box" style="grid-column: 1/-1;">
+        <div class="info-label">Social Media Platforms Used</div>
+        <div class="info-value">${item.platforms_checked || 'N/A'}</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 16px;">
+      <div class="section-title">Original Paper Photo</div>
+      <img src="${photoPath}" style="width: 100%; max-height: 380px; object-fit: contain; border-radius: 6px; background: #000; border: 1px solid var(--border-color);">
+    </div>
+
+    <div>
+      <div class="section-title">Handwritten Crop Snippets + Extracted Digital OCR Text</div>
+      <div class="crops-grid">${cropGridHtml}</div>
+    </div>
+  `;
+
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+function clearAllData() {
+  Swal.fire({
+    title: 'Clear All Data?',
+    text: 'This will delete all saved scan records, Excel files, and crop image snippets from the server.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#1a73e8',
+    confirmButtonText: 'Yes, clear everything!'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      fetch('/api/clear', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          Swal.fire('Cleared!', 'All server scan data has been deleted.', 'success');
+          fetchScans();
+        })
+        .catch(err => {
+          Swal.fire('Error', err.toString(), 'error');
+        });
+    }
+  });
+}
+
+fetchScans();
+</script>
+</body>
+</html>

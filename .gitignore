@@ -1,0 +1,33 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data & uploaded photos
+data/
+uploads/
+crops/
+markers/
+output/
+*.xlsx
+*.csv
+*.json
+*.jpg
+*.jpeg
+*.png
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+
+# Archives
+*.zip
+*.tar.gz
+*.tgz
+
+# IDE & OS junk
+.DS_Store
+.idea/
+.vscode/
