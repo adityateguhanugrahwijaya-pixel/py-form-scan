@@ -65,47 +65,86 @@ def check_image_quality(image):
     return metrics
 
 
+def _order_points(pts):
+    rect = np.zeros((4, 2), dtype="float32")
+    s = pts.sum(axis=1)
+    rect[0] = pts[np.argmin(s)]
+    rect[2] = pts[np.argmax(s)]
+    diff = np.diff(pts, axis=1)
+    rect[1] = pts[np.argmin(diff)]
+    rect[3] = pts[np.argmax(diff)]
+    return rect
+
+
+def _fallback_contour_or_resize_align(image):
+    """Fallback alignment when ArUco markers are not printed/detected on the photo:
+    1. Try finding 4-corner paper contour.
+    2. Fallback to direct resize to canonical template dimensions.
+    """
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    edged = cv2.Canny(blurred, 50, 150)
+
+    contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)
+
+    min_area = (image.shape[0] * image.shape[1]) * 0.15
+    for c in contours:
+        if cv2.contourArea(c) < min_area:
+            break
+        peri = cv2.arcLength(c, True)
+        approx = cv2.approxPolyDP(c, 0.02 * peri, True)
+        if len(approx) == 4:
+            src_pts = _order_points(approx.reshape(4, 2))
+            dst_pts = np.array([
+                [0, 0],
+                [cfg.CANONICAL_SIZE_PX[0] - 1, 0],
+                [cfg.CANONICAL_SIZE_PX[0] - 1, cfg.CANONICAL_SIZE_PX[1] - 1],
+                [0, cfg.CANONICAL_SIZE_PX[1] - 1]
+            ], dtype="float32")
+            M = cv2.getPerspectiveTransform(src_pts, dst_pts)
+            return cv2.warpPerspective(image, M, cfg.CANONICAL_SIZE_PX)
+
+    # Direct resize fallback
+    return cv2.resize(image, cfg.CANONICAL_SIZE_PX)
+
+
 def detect_and_align(image):
     """Find the 4 corner ArUco markers and perspective-warp the photo so it
-    matches the canonical template pixel grid exactly."""
-    aruco_dict = cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, cfg.ARUCO_DICT))
-    params = cv2.aruco.DetectorParameters()
-    detector = cv2.aruco.ArucoDetector(aruco_dict, params)
+    matches the canonical template pixel grid exactly. If markers are missing/not found,
+    falls back to paper contour / direct frame alignment."""
+    try:
+        aruco_dict = cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, cfg.ARUCO_DICT))
+        params = cv2.aruco.DetectorParameters()
+        detector = cv2.aruco.ArucoDetector(aruco_dict, params)
 
-    corners, ids, _ = detector.detectMarkers(image)
-    if ids is None or len(ids) < 4:
-        found = 0 if ids is None else len(ids)
-        raise AlignmentError(
-            f"Only found {found}/4 corner markers. Retake the photo with all "
-            f"four corners visible, flat, and well lit."
-        )
+        corners, ids, _ = detector.detectMarkers(image)
+        if ids is not None and len(ids) >= 4:
+            ids_flat = ids.flatten()
+            center_by_id = {}
+            for i, marker_id in enumerate(ids_flat):
+                if marker_id in cfg.MARKER_POSITIONS_PT:
+                    center_by_id[marker_id] = corners[i][0].mean(axis=0)
 
-    ids = ids.flatten()
-    center_by_id = {}
-    for i, marker_id in enumerate(ids):
-        if marker_id in cfg.MARKER_POSITIONS_PT:
-            center_by_id[marker_id] = corners[i][0].mean(axis=0)
+            missing = set(cfg.MARKER_POSITIONS_PT) - set(center_by_id)
+            if not missing:
+                src_pts = np.array([center_by_id[i] for i in [0, 1, 2, 3]], dtype="float32")
+                dst_pts = []
+                for marker_id in [0, 1, 2, 3]:
+                    mx, my = cfg.MARKER_POSITIONS_PT[marker_id]
+                    cx = (mx + cfg.MARKER_SIZE_PT / 2) * cfg.PT_TO_PX
+                    cy = (my + cfg.MARKER_SIZE_PT / 2) * cfg.PT_TO_PX
+                    dst_pts.append([cx, cy])
+                dst_pts = np.array(dst_pts, dtype="float32")
 
-    missing = set(cfg.MARKER_POSITIONS_PT) - set(center_by_id)
-    if missing:
-        raise AlignmentError(f"Missing marker id(s): {sorted(missing)}")
+                M = cv2.getPerspectiveTransform(src_pts, dst_pts)
+                return cv2.warpPerspective(image, M, cfg.CANONICAL_SIZE_PX)
+    except Exception:
+        pass
 
-    # source points = where the markers actually are in the photo
-    src_pts = np.array([center_by_id[i] for i in [0, 1, 2, 3]], dtype="float32")
+    # Fallback when ArUco markers are missing or not detected
+    return _fallback_contour_or_resize_align(image)
 
-    # destination points = where those same marker centers sit on the
-    # canonical template, in pixels
-    dst_pts = []
-    for marker_id in [0, 1, 2, 3]:
-        mx, my = cfg.MARKER_POSITIONS_PT[marker_id]
-        cx = (mx + cfg.MARKER_SIZE_PT / 2) * cfg.PT_TO_PX
-        cy = (my + cfg.MARKER_SIZE_PT / 2) * cfg.PT_TO_PX
-        dst_pts.append([cx, cy])
-    dst_pts = np.array(dst_pts, dtype="float32")
-
-    M = cv2.getPerspectiveTransform(src_pts, dst_pts)
-    aligned = cv2.warpPerspective(image, M, cfg.CANONICAL_SIZE_PX)
-    return aligned
 
 
 def region_darkness(gray_image, region, inset_frac=0.18):
