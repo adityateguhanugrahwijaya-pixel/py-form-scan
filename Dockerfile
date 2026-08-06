@@ -18,12 +18,8 @@ COPY markers ./markers
 
 RUN mkdir -p uploads crops output data
 
-
-# runs as non-root
-RUN useradd -m scanner && chown -R scanner:scanner /app
-USER scanner
-
 EXPOSE 5001
+
 
 # gunicorn = production WSGI server. app.py's __main__ dev server block is
 # only used for local testing, not this container.

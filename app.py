@@ -143,8 +143,12 @@ CROPS_DIR = os.path.join(DATA_DIR, "crops")
 EXCEL_PATH = os.path.join(DATA_DIR, "results.xlsx")
 CSV_PATH = os.path.join(DATA_DIR, "scans.csv")
 
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(CROPS_DIR, exist_ok=True)
+try:
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    os.makedirs(CROPS_DIR, exist_ok=True)
+except Exception as e:
+    print(f"[WARNING] Could not create upload/crops directories ({e}). Ensure directory permissions are writeable.")
+
 
 excel_lock = threading.Lock()
 
