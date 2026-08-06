@@ -7,14 +7,16 @@ __pycache__/
 data/
 uploads/
 crops/
-markers/
 output/
+
 *.xlsx
 *.csv
 *.json
 *.jpg
 *.jpeg
 *.png
+!markers/*.png
+
 
 # Virtual environments
 venv/

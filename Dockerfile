@@ -15,9 +15,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py batch_scan.py scan_form.py template_config.py prepare_template.py capture.html ./
 COPY markers ./markers
-COPY output ./output
 
-RUN mkdir -p uploads crops
+RUN mkdir -p uploads crops output data
+
 
 # runs as non-root
 RUN useradd -m scanner && chown -R scanner:scanner /app
