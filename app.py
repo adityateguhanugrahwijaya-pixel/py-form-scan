@@ -29,6 +29,30 @@ try:
 except ImportError:
     HAS_PYTESSERACT = False
 
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
+
+def sanitize_json_obj(obj):
+    """Recursively convert NumPy data types to native Python types for JSON serialization."""
+    if isinstance(obj, dict):
+        return {k: sanitize_json_obj(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_json_obj(v) for v in obj]
+    elif np is not None:
+        if isinstance(obj, (np.bool_, bool)):
+            return bool(obj)
+        elif isinstance(obj, (np.integer, int)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, float)):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+    return obj
+
+
 
 def clean_ocr_text(text):
     """Strips debug prefixes, field label names, and applies OCR handwriting auto-corrections."""
@@ -316,7 +340,8 @@ def scan_endpoint():
     except Exception as e:
         result["excel_error"] = str(e)
 
-    return jsonify(result)
+    return jsonify(sanitize_json_obj(result))
+
 
 
 if __name__ == "__main__":

@@ -36,17 +36,17 @@ def check_image_quality(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     # 1. Blurriness Check (Laplacian Variance)
-    blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
+    blur_score = float(cv2.Laplacian(gray, cv2.CV_64F).var())
 
     # 2. Lighting & Exposure Check
     brightness = float(np.mean(gray))
 
     metrics = {
-        "blur_score": round(blur_score, 1),
-        "brightness": round(brightness, 1),
-        "is_blurry": blur_score < 40.0,
-        "is_too_dark": brightness < 30.0,
-        "is_overexposed": brightness > 245.0,
+        "blur_score": float(round(blur_score, 1)),
+        "brightness": float(round(brightness, 1)),
+        "is_blurry": bool(blur_score < 40.0),
+        "is_too_dark": bool(brightness < 30.0),
+        "is_overexposed": bool(brightness > 245.0),
     }
 
     if metrics["is_blurry"]:
@@ -63,6 +63,7 @@ def check_image_quality(image):
         )
 
     return metrics
+
 
 
 def _order_points(pts):
