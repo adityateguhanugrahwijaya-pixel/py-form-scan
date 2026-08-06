@@ -79,17 +79,40 @@ def _order_points(pts):
 
 def _fallback_contour_or_resize_align(image):
     """Fallback alignment when ArUco markers are not printed/detected on the photo:
-    1. Try finding 4-corner paper contour.
-    2. Fallback to direct resize to canonical template dimensions.
+    1. Handle landscape vs portrait orientation (rotate landscape photos 90°).
+    2. Map paper boundaries onto the original page area inside canonical grid
+       (accounting for MARGIN_PT offset).
     """
+    # 1. Auto-rotate landscape photos to portrait
+    h, w = image.shape[:2]
+    if w > h:
+        image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+        h, w = image.shape[:2]
+
+    # Target points: the paper outline corresponds to the ORIGINAL page inside CANONICAL canvas
+    x0 = cfg.MARGIN_PT * cfg.PT_TO_PX
+    y0 = cfg.MARGIN_PT * cfg.PT_TO_PX
+    x1 = (cfg.ORIG_PAGE_W_PT + cfg.MARGIN_PT) * cfg.PT_TO_PX
+    y1 = (cfg.ORIG_PAGE_H_PT + cfg.MARGIN_PT) * cfg.PT_TO_PX
+
+    dst_pts = np.array([
+        [x0, y0],
+        [x1, y0],
+        [x1, y1],
+        [x0, y1]
+    ], dtype="float32")
+
+    # 2. Try paper contour detection
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    edged = cv2.Canny(blurred, 50, 150)
+    edged = cv2.Canny(blurred, 30, 120)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    edged = cv2.dilate(edged, kernel, iterations=2)
 
     contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
-    min_area = (image.shape[0] * image.shape[1]) * 0.15
+    min_area = (h * w) * 0.15
     for c in contours:
         if cv2.contourArea(c) < min_area:
             break
@@ -97,17 +120,19 @@ def _fallback_contour_or_resize_align(image):
         approx = cv2.approxPolyDP(c, 0.02 * peri, True)
         if len(approx) == 4:
             src_pts = _order_points(approx.reshape(4, 2))
-            dst_pts = np.array([
-                [0, 0],
-                [cfg.CANONICAL_SIZE_PX[0] - 1, 0],
-                [cfg.CANONICAL_SIZE_PX[0] - 1, cfg.CANONICAL_SIZE_PX[1] - 1],
-                [0, cfg.CANONICAL_SIZE_PX[1] - 1]
-            ], dtype="float32")
             M = cv2.getPerspectiveTransform(src_pts, dst_pts)
             return cv2.warpPerspective(image, M, cfg.CANONICAL_SIZE_PX)
 
-    # Direct resize fallback
-    return cv2.resize(image, cfg.CANONICAL_SIZE_PX)
+    # 3. Direct perspective warp: map full image corners to original page rect inside canonical canvas
+    src_pts = np.array([
+        [0, 0],
+        [w - 1, 0],
+        [w - 1, h - 1],
+        [0, h - 1]
+    ], dtype="float32")
+    M = cv2.getPerspectiveTransform(src_pts, dst_pts)
+    return cv2.warpPerspective(image, M, cfg.CANONICAL_SIZE_PX)
+
 
 
 def detect_and_align(image):
