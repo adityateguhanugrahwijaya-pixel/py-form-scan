@@ -313,6 +313,33 @@ def clear_all_data():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/detect_corners", methods=["POST"])
+def detect_corners_endpoint():
+    if "image" not in request.files:
+        return jsonify({"error": "No image uploaded"}), 400
+    file = request.files["image"]
+    temp_id = f"temp_{uuid.uuid4().hex[:6]}.jpg"
+    temp_path = os.path.join(UPLOAD_DIR, temp_id)
+    file.save(temp_path)
+
+    try:
+        try:
+            from scan_form import detect_paper_corners
+            corners = detect_paper_corners(temp_path)
+        except Exception:
+            corners = []
+        img = Image.open(temp_path)
+        w, h = img.size
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+
+    return jsonify({"corners": corners, "width": w, "height": h})
+
+
 @app.route("/scan", methods=["POST"])
 def scan_endpoint():
     if "image" not in request.files:
@@ -323,9 +350,16 @@ def scan_endpoint():
     photo_path = os.path.join(UPLOAD_DIR, f"{form_id}.jpg")
     file.save(photo_path)
 
+    user_corners = None
+    if "corners" in request.form:
+        try:
+            user_corners = json.loads(request.form["corners"])
+        except Exception:
+            pass
+
     out_prefix = os.path.join(CROPS_DIR, form_id)
     try:
-        result = scan(photo_path, out_prefix)
+        result = scan(photo_path, out_prefix, user_corners=user_corners)
     except AlignmentError as e:
         return jsonify({"error": str(e)}), 422
     except Exception as e:
@@ -341,6 +375,7 @@ def scan_endpoint():
         result["excel_error"] = str(e)
 
     return jsonify(sanitize_json_obj(result))
+
 
 
 

@@ -553,8 +553,25 @@
 
       <div id="status" style="margin-top: 12px; font-size: 13px; color: var(--text-secondary); text-align: center;"></div>
 
+      <!-- Interactive Corner Adjuster Card -->
+      <div id="corner-adjuster-card" class="hidden" style="margin-top: 16px; background: white; border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <div style="font-weight: 500; font-size: 14px; color: var(--google-blue); display: flex; align-items: center; gap: 6px;">
+            <span>🎯 Adjust Paper Corners (Drag Blue Circles)</span>
+          </div>
+          <button type="button" class="btn btn-outlined" style="padding: 4px 10px; font-size: 12px;" onclick="autoDetectCorners()">🪄 Re-Detect</button>
+        </div>
+        <div style="position: relative; width: 100%; touch-action: none;">
+          <canvas id="adjuster-canvas" style="width: 100%; border-radius: 6px; border: 1px solid var(--border-color); cursor: crosshair; touch-action: none; background: #000;"></canvas>
+        </div>
+        <div style="margin-top: 8px; font-size: 12px; color: var(--text-secondary); text-align: center;">
+          Drag TL (Top-Left), TR (Top-Right), BR (Bottom-Right), BL (Bottom-Left) handles to align with the paper corners.
+        </div>
+      </div>
+
       <!-- Live Scan Result Card -->
       <div id="live-result" class="hidden"></div>
+
     </div>
   </div>
 
@@ -664,6 +681,174 @@ fileInput.onchange = (e) => {
   if (file) setCapturedPhoto(file);
 };
 
+let currentCorners = [];
+
+let loadedImage = null;
+let activeCornerIndex = -1;
+
+const adjusterCanvas = document.getElementById('adjuster-canvas');
+const adjusterCtx = adjusterCanvas.getContext('2d');
+const cornerAdjusterCard = document.getElementById('corner-adjuster-card');
+
+function loadCornerAdjuster(imageBlob) {
+  const img = new Image();
+  img.onload = () => {
+    loadedImage = img;
+    adjusterCanvas.width = img.width;
+    adjusterCanvas.height = img.height;
+    autoDetectCorners();
+  };
+  img.src = URL.createObjectURL(imageBlob);
+}
+
+function autoDetectCorners() {
+  if (!currentBlob || !loadedImage) return;
+
+  const fd = new FormData();
+  fd.append('image', currentBlob, 'form.jpg');
+
+  statusDiv.textContent = "Auto-detecting paper corners...";
+
+  fetch('/api/detect_corners', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.corners && data.corners.length === 4) {
+        currentCorners = data.corners;
+      } else {
+        setDefaultCorners();
+      }
+      drawCornerAdjuster();
+      cornerAdjusterCard.classList.remove('hidden');
+      statusDiv.textContent = "Adjust corner dots if needed, then tap 'Upload & Process'.";
+    })
+    .catch(() => {
+      setDefaultCorners();
+      drawCornerAdjuster();
+      cornerAdjusterCard.classList.remove('hidden');
+      statusDiv.textContent = "Adjust corner dots if needed, then tap 'Upload & Process'.";
+    });
+}
+
+function setDefaultCorners() {
+  if (!loadedImage) return;
+  const w = loadedImage.width, h = loadedImage.height;
+  currentCorners = [
+    [w * 0.05, h * 0.05],
+    [w * 0.95, h * 0.05],
+    [w * 0.95, h * 0.95],
+    [w * 0.05, h * 0.95]
+  ];
+}
+
+function drawCornerAdjuster() {
+  if (!loadedImage || currentCorners.length < 4) return;
+  const ctx = adjusterCtx;
+  const w = adjusterCanvas.width;
+  const h = adjusterCanvas.height;
+
+  ctx.drawImage(loadedImage, 0, 0, w, h);
+
+  // Draw semi-transparent blue fill polygon
+  ctx.beginPath();
+  ctx.moveTo(currentCorners[0][0], currentCorners[0][1]);
+  ctx.lineTo(currentCorners[1][0], currentCorners[1][1]);
+  ctx.lineTo(currentCorners[2][0], currentCorners[2][1]);
+  ctx.lineTo(currentCorners[3][0], currentCorners[3][1]);
+  ctx.closePath();
+
+  ctx.fillStyle = 'rgba(26, 115, 232, 0.22)';
+  ctx.fill();
+
+  ctx.lineWidth = Math.max(3, Math.round(w / 300));
+  ctx.strokeStyle = '#1a73e8';
+  ctx.setLineDash([8, 6]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw 4 Draggable Corner Handles
+  const labels = ['TL', 'TR', 'BR', 'BL'];
+  const radius = Math.max(18, Math.round(w / 45));
+
+  currentCorners.forEach((pt, idx) => {
+    ctx.beginPath();
+    ctx.arc(pt[0], pt[1], radius, 0, 2 * Math.PI);
+    ctx.fillStyle = idx === activeCornerIndex ? '#34a853' : '#1a73e8';
+    ctx.fill();
+    ctx.lineWidth = Math.max(3, Math.round(radius / 4));
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${Math.round(radius * 0.85)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(labels[idx], pt[0], pt[1]);
+  });
+}
+
+function getCanvasCoords(evt) {
+  const rect = adjusterCanvas.getBoundingClientRect();
+  const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+  const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+
+  const scaleX = adjusterCanvas.width / rect.width;
+  const scaleY = adjusterCanvas.height / rect.height;
+
+  return [
+    (clientX - rect.left) * scaleX,
+    (clientY - rect.top) * scaleY
+  ];
+}
+
+function findHitCorner(x, y) {
+  const touchRadius = Math.max(45, adjusterCanvas.width / 18);
+  for (let i = 0; i < currentCorners.length; i++) {
+    const dx = currentCorners[i][0] - x;
+    const dy = currentCorners[i][1] - y;
+    if (Math.sqrt(dx * dx + dy * dy) <= touchRadius) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function handlePointerDown(evt) {
+  const [x, y] = getCanvasCoords(evt);
+  const hit = findHitCorner(x, y);
+  if (hit >= 0) {
+    activeCornerIndex = hit;
+    evt.preventDefault();
+    drawCornerAdjuster();
+  }
+}
+
+function handlePointerMove(evt) {
+  if (activeCornerIndex < 0) return;
+  evt.preventDefault();
+  const [x, y] = getCanvasCoords(evt);
+  
+  const clampedX = Math.max(0, Math.min(adjusterCanvas.width, x));
+  const clampedY = Math.max(0, Math.min(adjusterCanvas.height, y));
+  
+  currentCorners[activeCornerIndex] = [clampedX, clampedY];
+  drawCornerAdjuster();
+}
+
+function handlePointerUp(evt) {
+  if (activeCornerIndex >= 0) {
+    activeCornerIndex = -1;
+    drawCornerAdjuster();
+  }
+}
+
+adjusterCanvas.addEventListener('mousedown', handlePointerDown);
+adjusterCanvas.addEventListener('mousemove', handlePointerMove);
+window.addEventListener('mouseup', handlePointerUp);
+
+adjusterCanvas.addEventListener('touchstart', handlePointerDown, { passive: false });
+adjusterCanvas.addEventListener('touchmove', handlePointerMove, { passive: false });
+window.addEventListener('touchend', handlePointerUp);
+
 function setCapturedPhoto(blob) {
   currentBlob = blob;
   preview.src = URL.createObjectURL(blob);
@@ -673,7 +858,7 @@ function setCapturedPhoto(blob) {
   captureActions.classList.remove('hidden');
   document.getElementById('camera-overlay').classList.add('hidden');
   
-  statusDiv.textContent = "Photo ready. Tap 'Upload & Process' or 'Retake'.";
+  loadCornerAdjuster(blob);
 }
 
 retakeBtn.onclick = () => {
@@ -683,23 +868,26 @@ retakeBtn.onclick = () => {
   shootBtn.classList.remove('hidden');
   captureActions.classList.add('hidden');
   document.getElementById('camera-overlay').classList.remove('hidden');
+  cornerAdjusterCard.classList.add('hidden');
   statusDiv.textContent = "";
   liveResult.classList.add('hidden');
 };
-
 
 confirmBtn.onclick = () => {
   if (!currentBlob) return;
 
   Swal.fire({
     title: 'Processing Survey...',
-    text: 'Aligning paper markers and extracting text with OCR...',
+    text: 'Aligning paper corners and extracting text with OCR...',
     allowOutsideClick: false,
     didOpen: () => { Swal.showLoading(); }
   });
 
   const fd = new FormData();
   fd.append('image', currentBlob, 'form.jpg');
+  if (currentCorners && currentCorners.length === 4) {
+    fd.append('corners', JSON.stringify(currentCorners));
+  }
 
   fetch('/scan', { method: 'POST', body: fd })
     .then(r => r.json())
@@ -718,6 +906,7 @@ confirmBtn.onclick = () => {
       Swal.fire({ icon: 'error', title: 'Upload Error', text: err });
     });
 };
+
 
 function renderLiveResult(data) {
   let radioHtml = '';

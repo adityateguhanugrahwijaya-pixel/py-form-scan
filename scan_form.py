@@ -170,10 +170,72 @@ def _fallback_contour_or_resize_align(image):
 
 
 
-def detect_and_align(image):
+def detect_paper_corners(image_or_path):
+    """Auto-detects initial 4 corner coordinates of paper in photo, returning [[x,y],...] or default frame inset."""
+    if isinstance(image_or_path, str):
+        image = cv2.imread(image_or_path)
+    else:
+        image = image_or_path
+    if image is None:
+        return []
+    h, w = image.shape[:2]
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    edged = cv2.Canny(blurred, 30, 120)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    edged = cv2.dilate(edged, kernel, iterations=2)
+
+    contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)
+
+    min_area = (h * w) * 0.15
+    for c in contours:
+        if cv2.contourArea(c) < min_area:
+            break
+        peri = cv2.arcLength(c, True)
+        approx = cv2.approxPolyDP(c, 0.02 * peri, True)
+        if len(approx) == 4 and cv2.isContourConvex(approx):
+            pts = _order_points(approx.reshape(4, 2))
+            return [[float(pt[0]), float(pt[1])] for pt in pts]
+
+    pad_w = w * 0.05
+    pad_h = h * 0.05
+    return [
+        [float(pad_w), float(pad_h)],
+        [float(w - pad_w), float(pad_h)],
+        [float(w - pad_w), float(h - pad_h)],
+        [float(pad_w), float(h - pad_h)]
+    ]
+
+
+def detect_and_align(image, user_corners=None):
     """Find the 4 corner ArUco markers and perspective-warp the photo so it
-    matches the canonical template pixel grid exactly. If markers are missing/not found,
-    falls back to paper contour / direct frame alignment."""
+    matches the canonical template pixel grid exactly. If user_corners is provided,
+    uses manual user-adjusted corners. Otherwise falls back to paper contour / frame alignment."""
+    if user_corners is not None and len(user_corners) == 4:
+        try:
+            src_pts = np.array(user_corners, dtype="float32")
+            x0 = cfg.MARGIN_PT * cfg.PT_TO_PX
+            y0 = cfg.MARGIN_PT * cfg.PT_TO_PX
+            x1 = (cfg.ORIG_PAGE_W_PT + cfg.MARGIN_PT) * cfg.PT_TO_PX
+            y1 = (cfg.ORIG_PAGE_H_PT + cfg.MARGIN_PT) * cfg.PT_TO_PX
+
+            dst_pts = np.array([
+                [x0, y0],
+                [x1, y0],
+                [x1, y1],
+                [x0, y1]
+            ], dtype="float32")
+
+            M = cv2.getPerspectiveTransform(src_pts, dst_pts)
+            aligned = cv2.warpPerspective(image, M, cfg.CANONICAL_SIZE_PX)
+            if _score_header_orientation(aligned) < 0:
+                aligned = cv2.rotate(aligned, cv2.ROTATE_180)
+            return aligned
+        except Exception:
+            pass
+
     try:
         aruco_dict = cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, cfg.ARUCO_DICT))
         params = cv2.aruco.DetectorParameters()
@@ -205,6 +267,7 @@ def detect_and_align(image):
 
     # Fallback when ArUco markers are missing or not detected
     return _fallback_contour_or_resize_align(image)
+
 
 
 
@@ -349,14 +412,15 @@ def crop_text_fields(aligned_bgr, out_prefix):
     return saved, ocr_texts
 
 
-def scan(photo_path, out_prefix):
+def scan(photo_path, out_prefix, user_corners=None):
     image = cv2.imread(photo_path)
     if image is None:
         raise FileNotFoundError(f"Could not read image: {photo_path}")
 
     quality_metrics = check_image_quality(image)
 
-    aligned = detect_and_align(image)
+    aligned = detect_and_align(image, user_corners=user_corners)
+
     cv2.imwrite(f"{out_prefix}_aligned.png", aligned)
 
     checked_boxes, radio_answers = score_checkboxes(aligned)
